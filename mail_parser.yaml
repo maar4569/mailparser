@@ -1,0 +1,10 @@
+credential:
+  hostname: svr01
+  port: 110
+  username: userA
+  password: pass
+
+config:
+  read_after_del: false
+  count_at_once: 20
+  eml_mail_path: ./home/user/eml

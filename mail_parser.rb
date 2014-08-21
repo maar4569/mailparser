@@ -1,3 +1,4 @@
+require 'yaml'
 class ParsingDirector
     def initialize(parserBuilder)
         @mail_parser =  parserBuilder
@@ -24,10 +25,11 @@ end
 #concreate builder
 class EmlParser < ParserBuilder
     def initialize(eml_dir)
-        @emr_dir = eml_dir
+        @eml_dir = eml_dir
 	@events  = Hash.new
     end
     def retrieve_mail
+        p "#{self.class.name}.#{__method__} from #{@eml_dir}"
         #directory_loop
 	#sample
            mailObject = Hash.new
@@ -48,12 +50,7 @@ class EmlParser < ParserBuilder
 end
 class POP3Parser < ParserBuilder
    def initialize(credential)
-       @mailserver = ""
-       @port       = ""
-       @username   = ""
-       @password   = ""
-       @isssl      = false
-       @events     = Hash.new
+       @credential = credential
    end
    def retrieve_mail
        #find option(count) loop
@@ -139,15 +136,16 @@ class OplogMailParser
 end
 #-----------------------------------
 #1.set parse mode file(eml)? or POP3?
+config = YAML.load_file('mail_parser.yaml')
 parse_mode ="eml" # or pop3
 
 case parse_mode
     when "eml"
         eml_dir=""
-        mailDirector= ParsingDirector.new(EmlParser.new(eml_dir))
+        mailDirector= ParsingDirector.new(EmlParser.new(config['config']['eml_mail_path']))
     when "pop3"
 	credential = ""
-        mailDirector= ParsingDirector.new(POP3Parser.new(credential))
+        mailDirector= ParsingDirector.new(POP3Parser.new(config['credential']))
     when "imap"
 
     else
