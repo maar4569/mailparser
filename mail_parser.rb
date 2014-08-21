@@ -5,6 +5,9 @@ class ParsingDirector
     def do
       @mail_parser.retrieve_mail
     end
+    def write_to(filename)
+      @mail_parser.write_to filename
+    end
 end
 #builder interface
 class ParserBuilder
@@ -14,11 +17,15 @@ class ParserBuilder
     def retrieve_mail
         raise "called abstract method(retrieve_mail)"
     end
+    def write_to(filename)
+	raise "called abstract method(write_to)"
+    end
 end
 #concreate builder
 class EmlParser < ParserBuilder
     def initialize(eml_dir)
         @emr_dir = eml_dir
+	@events  = Hash.new
     end
     def retrieve_mail
         #directory_loop
@@ -32,12 +39,11 @@ class EmlParser < ParserBuilder
 	   mailObject[:mail_type] = "smllw"
 	   mailObject[:body] = "test:hello test2:bye"
 	#sample
-	#mailObject = "smllw"	
 	mlpsr = OplogMailParser.new(mailObject)
-	events = mlpsr.parse_mail
-        #sample
-	p "events====== #{events[:log_timestamp]}"
-	#sample
+	@events = mlpsr.parse_mail
+    end
+    def write_to(filename)
+	p @events    
     end
 end
 class POP3Parser < ParserBuilder
@@ -47,11 +53,15 @@ class POP3Parser < ParserBuilder
        @username   = ""
        @password   = ""
        @isssl      = false
+       @events     = Hash.new
    end
    def retrieve_mail
        #find option(count) loop
        mlpsr = OplogMailParser.new(mailObject)
-       mlpsr.parse_mail
+       @events     =  mlpsr.parse_mail
+   end
+   def write_to(filename)
+       @events	   
    end
 end
 
@@ -59,7 +69,6 @@ class OplogMailParser
   attr_reader   :mail_to , :mail_from , :subject, :mail_type, :bodyparser ,:mail_timestamp,:log_timestamp
   def initialize(mail)
       @mailObject = mail
-      p "mail->#{mail}"
   end
   def getMailTypeFromSubject(subject)
       begin
@@ -110,18 +119,21 @@ class OplogMailParser
   #startegy for parsing mail body
   BK_DEL_MAIL_PARSER = lambda do | context |
       events = Hash.new
+      #key_value = > log_timestamp/data
       return events
   end
 
   LW_MAIL_PARSER = lambda do | context |
       events = Hash.new
+      #key/Value => mail_timestmap/data
       events[context[:mail_timestamp]] = "mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=#{context[:mail_type]} body=\"#{context[:body]}\""
 				
       return events
   end
   WP_MAIL_PARSER = lambda do | context |
-      p "parse body: #{context}"
       events = Hash.new
+      #key/Value => mail_timestmap/data
+      events[context[:mail_timestamp]] = "mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=#{context[:mail_type]} body=\"#{context[:body]}\""
       return events
   end
 end
@@ -142,4 +154,4 @@ case parse_mode
 end
 
 mailDirector.do
-
+mailDirector.write_to "oplog.mail"
