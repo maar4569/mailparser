@@ -135,21 +135,19 @@ class OplogMailParser
   end
 end
 #-----------------------------------
-#1.set parse mode file(eml)? or POP3?
-config = YAML.load_file('mail_parser.yaml')
-parse_mode ="eml" # or pop3
-
-case parse_mode
+#1.set parsing mode.
+yml = YAML.load_file('mail_parser.yaml')
+case yml['config']['mode']
     when "eml"
-        eml_dir=""
-        mailDirector= ParsingDirector.new(EmlParser.new(config['config']['eml_mail_path']))
+        mailDirector= ParsingDirector.new(EmlParser.new(yml['config']['eml_mail_path']))
     when "pop3"
-	credential = ""
-        mailDirector= ParsingDirector.new(POP3Parser.new(config['credential']))
+        mailDirector= ParsingDirector.new(POP3Parser.new(yml['credential']))
     when "imap"
 
     else
 end
-
+#parse e-mails and convert events formatted with hash list.
 mailDirector.do
+
+#output events.
 mailDirector.write_to "oplog.mail"
