@@ -1,4 +1,5 @@
 require 'yaml'
+require 'mail'
 class ParsingDirector
     def initialize(parserBuilder)
         @mail_parser =  parserBuilder
@@ -42,20 +43,69 @@ class EmlParser < ParserBuilder
 	   mailObject[:body] = "test:hello test2:bye"
 	#sample
 	mlpsr = OplogMailParser.new(mailObject)
-	@events = mlpsr.parse_mail
+        parsed_events = mlpsr.parse_mail
+	@events.merge parsed_events
     end
     def write_to(filename)
-	p @events    
+	p @events
     end
 end
 class POP3Parser < ParserBuilder
    def initialize(credential)
        @credential = credential
+       @events     = Hash.new
    end
    def retrieve_mail
-       #find option(count) loop
-       mlpsr = OplogMailParser.new(mailObject)
-       @events     =  mlpsr.parse_mail
+       cred = @credential
+       begin
+	   #authentication
+	   Mail.defaults do
+	       p "access to #{cred['hostname']} #{cred['port']}"
+               retriever_method :pop3, :address    => cred['hostname'],
+		                       :port       => cred['port'],
+				       :user_name  => cred['username'],
+	                               :password   => cred['password'],
+				       :enable_ssl => cred['enable_ssl']
+           end
+	   #retrieve
+	   mails = Mail.find(:what => :first, :count => 5, :order => :desc)
+	   p "downloaded  #{mails.length} mail(s)"
+	   if mails.length > 0 then
+	       mails.each do | mail |
+		   #MAIL_DUMP.call mail
+	           mail2 = MAIL_TO_HASH.call mail
+                   mlpsr = OplogMailParser.new(mail2)
+                   parsed_events = mlpsr.parse_mail
+		   if parsed_events != nil then 
+	               @events.merge parsed_events
+		   end
+               end
+	   end
+           p "created #{@events.size} events."
+       rescue
+          p "excepion #{self.class.name}.#{__method__}"
+	  p $!
+       end
+   end
+   MAIL_DUMP = lambda do | mail |
+       p "call lambda MAIL_DUMP"
+       p "from #{mail.from}"
+       p "to #{mail.to}"
+       p "subject #{mail.subject}"
+       p "date #{mail.date.to_s}"
+       p "body #{mail.body}"
+       #p "body(d) #{mail.body.decoded}"
+   end
+   MAIL_TO_HASH = lambda do | mail |
+       listed_mail = [[:mail_from,mail.from],
+	             [:mail_to,mail.from],
+		     [:subject,mail.subject],
+		     [:date,mail.date.to_s],
+		     [:body,mail.body]
+                    ]
+       hashed_mail = Hash[*listed_mail.flatten(1)]
+       p "hased mail-> #{hashed_mail}"
+       return hashed_mail
    end
    def write_to(filename)
        @events	   
@@ -65,35 +115,50 @@ end
 class OplogMailParser
   attr_reader   :mail_to , :mail_from , :subject, :mail_type, :bodyparser ,:mail_timestamp,:log_timestamp
   def initialize(mail)
-      @mailObject = mail
+      @mail = mail #hased mail
   end
   def getMailTypeFromSubject(subject)
+      regex_ptns = {"smllw"=>"^Notification from SML",
+                    "bk_del"=>"^\\[SML\\]\\[(Backup|Delete)\\] (Success|Failure) ",
+                    "wp"=>"^\\[SML Server Status! (Warning!|fiz)\\]"}
       begin
-          p "mailtype is #{@mailObject[:mail_type]}"
+          #regex
+	  regex_ptns.each do | k,v |
+            test = Regexp.compile(v, Regexp::IGNORECASE)
+	    if test.match(subject) != nil then
+	      p "match #{k} => #{v}"
+	      @mail[:mail_type] = k
+	      break;
+	    end
+          end
+          p "mailtype is #{@mail[:mail_type]}"
       rescue
           p "excepion #{self.class.name}.#{__method__}"
 	  p $!
       end
-      return @mailObject[:mail_type]
+      return @mail[:mail_type]
   end
   def setParser(&bodyparser)
     @bodyparser = bodyparser
   end
   def parse_mail
       begin
+          #parse header
+	      #
 	  #parse body
-          @mail_type = getMailTypeFromSubject @subject
+          @mail_type = getMailTypeFromSubject @mail[:subject]
           case @mail_type
               when "bk_del"
                   self.setParser(&BK_DEL_MAIL_PARSER)
               when "smllw"
                   self.setParser(&LW_MAIL_PARSER)
-              when "WP"
+              when "wp"
                   self.setParser(&WP_MAIL_PARSER)
               else
                    p "we does not scan this mail."
+		   return nil
           end
-          events = @bodyparser.call(@mailObject)
+          events = @bodyparser.call(@mail)
       rescue
          p "excepion #{self.class.name}.#{__method__}"
 	 p $!
@@ -108,7 +173,7 @@ class OplogMailParser
       case @mail_type
           when "bk_del"
           when "smllw"
-          when "WP"		  
+          when "wp"		  
               csvrec = "#{@mail_timestamp.to_s},mail_to=#{@mail_to.to_s} mail_from=#{@mail_from.to_s} subject=#{@subject.to_s} #{@body.to_s}"
           else
       end
@@ -139,8 +204,10 @@ end
 yml = YAML.load_file('mail_parser.yaml')
 case yml['config']['mode']
     when "eml"
+	p "parse eml mails"
         mailDirector= ParsingDirector.new(EmlParser.new(yml['config']['eml_mail_path']))
     when "pop3"
+	p "parse emails from pop server"
         mailDirector= ParsingDirector.new(POP3Parser.new(yml['credential']))
     when "imap"
 
