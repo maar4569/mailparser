@@ -184,6 +184,7 @@ class OplogMailParser
   #startegy for parsing mail body
   BK_DEL_MAIL_PARSER = lambda do | context |
       events = Hash.new
+      isOpLog = false
       t_stamp_reg = "^[\\d]{4}-(0[1-9]|1[0-2])-[\\d]{2} (((0|1)[\\d]{1})|(2[0-4])):[0-5]{1}[\\d]{1}:[0-5]{1}[\\d]{1}\\.[\\d]{3}.+"
       p "parse body #{context[:body]}"
       begin
@@ -195,6 +196,7 @@ class OplogMailParser
                   kv = line.split(" ") #timestamp,xx,xx,message	  
 	          #key/val => process_time/various value
                   events[kv[0].strip] = "id1=#{kv[1]} id2=#{kv[2]} message=\"#{kv[3]}\" " + " mail_timestamp=\"#{contect[:mail_timestamp]}\" mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=\"#{context[:mail_type]}\""
+		  isOplog = true
               else
                   p "unmatch! #{line}"
 	      end
@@ -229,7 +231,7 @@ class OplogMailParser
 end
 #-----------------------------------
 #1.set parsing mode.
-yml = YAML.load_file('mail_parser.yaml')
+yml = YAML.load_file('mail_parser.yml')
 case yml['config']['mode']
     when "eml"
 	p "parse eml mails"
