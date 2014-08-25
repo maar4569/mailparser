@@ -191,14 +191,14 @@ class OplogMailParser
       body_to_lines = context[:body].split("\n")
           body_to_lines.each do | line |
 	      test = Regexp.compile(t_stamp_reg,:INGORECASE)
-              if test.match(line) != nil then
-                  p "match! #{line}"
+              if test.match(line.strip) != nil then
+                  p "match! #{line.strip}"
                   kv = line.split(" ") #timestamp,xx,xx,message	  
 	          #key/val => process_time/various value
-                  events[kv[0].strip] = "id1=#{kv[1]} id2=#{kv[2]} message=\"#{kv[3]}\" " + " mail_timestamp=\"#{contect[:mail_timestamp]}\" mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=\"#{context[:mail_type]}\""
+                  events[kv[0].strip] = "id1=#{kv[1]} id2=#{kv[2]} message=\"#{kv[3]}\" " + " mail_timestamp=\"#{context[:mail_timestamp]}\" mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=\"#{context[:mail_type]}\""
 		  isOplog = true
               else
-                  p "unmatch! #{line}"
+                  p "unmatch! #{line.strip}"
 	      end
           end
       rescue
