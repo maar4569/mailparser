@@ -1,8 +1,8 @@
 credential:
   hostname: pop.gmail.com
   port: 995
-  username: maar4569
-  password: masa7131
+  username: 
+  password: 
   enable_ssl: true
 config:
   mode: pop3 #eml or pop3
