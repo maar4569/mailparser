@@ -97,11 +97,15 @@ class POP3Parser < ParserBuilder
        #p "body(d) #{mail.body.decoded}"
    end
    MAIL_TO_HASH = lambda do | mail |
+       tmp_body = mail.body
+       if mail.multipart? == true then 
+         tmp_body = mail.text_part.decoded 
+       end
        listed_mail = [[:mail_from,mail.from],
 	             [:mail_to,mail.from],
 		     [:subject,mail.subject],
 		     [:date,mail.date.to_s],
-		     [:body,mail.body]
+		     [:body,tmp_body]
                     ]
        hashed_mail = Hash[*listed_mail.flatten(1)]
        p "hased mail-> #{hashed_mail}"
@@ -113,20 +117,19 @@ class POP3Parser < ParserBuilder
 end
 
 class OplogMailParser
-  attr_reader   :mail_to , :mail_from , :subject, :mail_type, :bodyparser ,:mail_timestamp,:log_timestamp
+  #attr_reader   :mail_to , :mail_from , :subject, :mail_type, :bodyparser ,:mail_timestamp,:log_timestamp
   def initialize(mail)
       @mail = mail #hased mail
   end
   def getMailTypeFromSubject(subject)
       regex_ptns = {"smllw"=>"^Notification from SML",
-                    "bk_del"=>"^\\[SML\\]\\[(Backup|Delete)\\] (Success|Failure) ",
+                    "bk_del"=>"^\\[SML\\]\\[(Backup|Delete)\\] (Success|Fatal).+ ",
                     "wp"=>"^\\[SML Server Status! (Warning!|fiz)\\]"}
       begin
           #regex
 	  regex_ptns.each do | k,v |
             test = Regexp.compile(v, Regexp::IGNORECASE)
 	    if test.match(subject) != nil then
-	      p "match #{k} => #{v}"
 	      @mail[:mail_type] = k
 	      break;
 	    end
@@ -181,14 +184,39 @@ class OplogMailParser
   #startegy for parsing mail body
   BK_DEL_MAIL_PARSER = lambda do | context |
       events = Hash.new
-      #key_value = > log_timestamp/data
+      t_stamp_reg = "^[\\d]{4}-(0[1-9]|1[0-2])-[\\d]{2} (((0|1)[\\d]{1})|(2[0-4])):[0-5]{1}[\\d]{1}:[0-5]{1}[\\d]{1}\\.[\\d]{3}.+"
+      p "parse body #{context[:body]}"
+      begin
+      body_to_lines = context[:body].split("\n")
+          body_to_lines.each do | line |
+	      test = Regexp.compile(t_stamp_reg,:INGORECASE)
+              if test.match(line) != nil then
+                  p "match! #{line}"
+                  kv = line.split(" ") #timestamp,xx,xx,message	  
+	          #key/val => process_time/various value
+                  events[kv[0].strip] = "id1=#{kv[1]} id2=#{kv[2]} message=\"#{kv[3]}\" " + " mail_timestamp=\"#{contect[:mail_timestamp]}\" mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=\"#{context[:mail_type]}\""
+              else
+                  p "unmatch! #{line}"
+	      end
+          end
+      rescue
+         p "excepion BK_DEL_MAILPERSER"
+	 p $!
+      end
       return events
   end
-
   LW_MAIL_PARSER = lambda do | context |
       events = Hash.new
-      #key/Value => mail_timestmap/data
-      events[context[:mail_timestamp]] = "mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=#{context[:mail_type]} body=\"#{context[:body]}\""
+      tmpBody = ""
+      body_to_lines = context[:body].split("\n")
+      body_to_lines.each do | line |
+        if line =~ /:/ then
+          key_val = line.split(":")
+	  tmpBody = tmpBody + "#{key_val[0].strip}=#{key_cal[1].strip}  "
+	end
+      end
+      #key/Value => mail_timestmap/dataa
+      events[context[:mail_timestamp]] = " mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=\"#{context[:mail_type]}\" #{tmpBody[:body].strip}"
 				
       return events
   end
