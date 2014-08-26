@@ -200,18 +200,27 @@ class OplogMailParser
   #startegy for parsing mail body
   BK_DEL_MAIL_PARSER = lambda do | context |
       events = Hash.new
-      t_stamp_reg = "^[\\d]{4}-(0[1-9]|1[0-2])-[\\d]{2} (((0|1)[\\d]{1})|(2[0-3])):[0-5]{1}[\\d]{1}:[0-5]{1}[\\d]{1}\\:[\\d]{3}.+"
+      prev_time = ""
+      t_stamp_reg = "^[\\d]{4}-(0[1-9]|1[0-2])-[\\d]{2} (((0|1)[\\d]{1})|(2[0-3])):[0-5]{1}[\\d]{1}:[0-5]{1}[\\d]{1}\\:[\\d]{3}"
+      t_id        = "(\\d+)"
+      t_message   = "(.+)"
+      t_stamp_reg2 = "(^[\\d]{4}-(0[1-9]|1[0-2])-[\\d]{2} (((0|1)[\\d]{1})|(2[0-3])):[0-5]{1}[\\d]{1}:[0-5]{1}[\\d]{1}\\:[\\d]{3})"
       begin
       body_to_lines = context[:body].split("\n")
           body_to_lines.each do | line |
 	      test = Regexp.compile(t_stamp_reg,:INGORECASE)
               if test.match(line.strip) != nil then
                   p "match! #{line.strip}"
-                  kv = line.split(/\t+/) #timestamp,xx,xx,message	  
+		  data =/#{t_stamp_reg2}\s+#{t_id}\s+#{t_id}\s+#{t_id}\s+#{t_message}/.match(line.strip)
+                  #for i in 0..data.size-1 do
+                  #    p "data[#{i}]=>#{data[i]}"
+		  #end
 	          #key/val => process_time/various value
-                  events[kv[0].strip] = "id1=#{kv[1]} id2=#{kv[2]} message=\"#{kv[3]}\" " + " mail_timestamp=\"#{context[:mail_timestamp]}\" mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=\"#{context[:mail_type]}\""
+                  events[data[1]] = "id1=#{data[7]} id2=#{data[8]} id3=#{data[9]} message=\"#{data[10]}\  mail_timestamp=\"#{context[:date]}\" mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=\"#{context[:mail_type]}\""
+		  prev_time = data[1]
               else
                   p "unmatch! #{line.strip}"
+		  events[prev_time] ="#{events[prev_time]} message=\"#{line.strip}\""
 	      end
           end
       rescue
@@ -230,7 +239,6 @@ class OplogMailParser
 	  tmpBody = tmpBody + "\"#{key_val[0].strip}\"=\"#{key_val[1].strip}\"  "
 	end
       end
-      #key/Value => mail_timestmap/dataa
       events[context[:date]] = " mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=\"#{context[:mail_type]}\" #{tmpBody.strip}"
 				
       return events
