@@ -47,7 +47,16 @@ class EmlParser < ParserBuilder
 	@events.merge parsed_events
     end
     def write_to(filename)
-	p @events
+	begin
+            File.open( filename ,"w") do | file |
+                @events.each_pair do | timestamp,event |
+                  file.write "#{timestamp},#{event}"
+	        end
+	    end
+	rescue
+            p "excepion #{self.class.name}.#{__method__}"
+            p $!
+	end
     end
 end
 class POP3Parser < ParserBuilder
@@ -77,11 +86,12 @@ class POP3Parser < ParserBuilder
                    mlpsr = OplogMailParser.new(mail2)
                    parsed_events = mlpsr.parse_mail
 		   if parsed_events != nil then 
-	               @events.merge parsed_events
-		   end
-               end
+		       parsed_events.each do |t_stamp,event | @events[t_stamp] = event end
+                   end
+	       end
+	       p "events=> #{@events}"
 	   end
-           p "created #{@events.size} events."
+           p "created #{@events.size.to_s} events."
        rescue
           p "excepion #{self.class.name}.#{__method__}"
 	  p $!
@@ -97,10 +107,12 @@ class POP3Parser < ParserBuilder
        #p "body(d) #{mail.body.decoded}"
    end
    MAIL_TO_HASH = lambda do | mail |
-       tmp_body = mail.body
        if mail.multipart? == true then 
          tmp_body = mail.text_part.decoded 
+       else
+         tmp_body = mail.body.decoded
        end
+       
        listed_mail = [[:mail_from,mail.from],
 	             [:mail_to,mail.from],
 		     [:subject,mail.subject],
@@ -108,11 +120,14 @@ class POP3Parser < ParserBuilder
 		     [:body,tmp_body]
                     ]
        hashed_mail = Hash[*listed_mail.flatten(1)]
-       p "hased mail-> #{hashed_mail}"
+       #p "hased mail-> #{hashed_mail}"
        return hashed_mail
    end
    def write_to(filename)
-       @events	   
+       p "write event"
+       @events.each do |t_stamp,event|
+           p "#{t_stamp},#{event}"
+       end	   
    end
 end
 
@@ -124,9 +139,10 @@ class OplogMailParser
   def getMailTypeFromSubject(subject)
       regex_ptns = {"smllw"=>"^Notification from SML",
                     "bk_del"=>"^\\[SML\\]\\[(Backup|Delete)\\] (Success|Fatal).+ ",
-                    "wp"=>"^\\[SML Server Status! (Warning!|fiz)\\]"}
+                    "wp"=>"^\\[SML Server Status! (Warning!|fiz).+"}
       begin
           #regex
+	  p "test subject =>#{subject}"
 	  regex_ptns.each do | k,v |
             test = Regexp.compile(v, Regexp::IGNORECASE)
 	    if test.match(subject) != nil then
@@ -184,19 +200,16 @@ class OplogMailParser
   #startegy for parsing mail body
   BK_DEL_MAIL_PARSER = lambda do | context |
       events = Hash.new
-      isOpLog = false
-      t_stamp_reg = "^[\\d]{4}-(0[1-9]|1[0-2])-[\\d]{2} (((0|1)[\\d]{1})|(2[0-4])):[0-5]{1}[\\d]{1}:[0-5]{1}[\\d]{1}\\.[\\d]{3}.+"
-      p "parse body #{context[:body]}"
+      t_stamp_reg = "^[\\d]{4}-(0[1-9]|1[0-2])-[\\d]{2} (((0|1)[\\d]{1})|(2[0-3])):[0-5]{1}[\\d]{1}:[0-5]{1}[\\d]{1}\\:[\\d]{3}.+"
       begin
       body_to_lines = context[:body].split("\n")
           body_to_lines.each do | line |
 	      test = Regexp.compile(t_stamp_reg,:INGORECASE)
               if test.match(line.strip) != nil then
                   p "match! #{line.strip}"
-                  kv = line.split(" ") #timestamp,xx,xx,message	  
+                  kv = line.split(/\t+/) #timestamp,xx,xx,message	  
 	          #key/val => process_time/various value
                   events[kv[0].strip] = "id1=#{kv[1]} id2=#{kv[2]} message=\"#{kv[3]}\" " + " mail_timestamp=\"#{context[:mail_timestamp]}\" mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=\"#{context[:mail_type]}\""
-		  isOplog = true
               else
                   p "unmatch! #{line.strip}"
 	      end
@@ -214,18 +227,29 @@ class OplogMailParser
       body_to_lines.each do | line |
         if line =~ /:/ then
           key_val = line.split(":")
-	  tmpBody = tmpBody + "#{key_val[0].strip}=#{key_cal[1].strip}  "
+	  tmpBody = tmpBody + "\"#{key_val[0].strip}\"=\"#{key_val[1].strip}\"  "
 	end
       end
       #key/Value => mail_timestmap/dataa
-      events[context[:mail_timestamp]] = " mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=\"#{context[:mail_type]}\" #{tmpBody[:body].strip}"
+      events[context[:date]] = " mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=\"#{context[:mail_type]}\" #{tmpBody.strip}"
 				
       return events
   end
   WP_MAIL_PARSER = lambda do | context |
-      events = Hash.new
+    events = Hash.new
+      tmpBody = ""
+      body_to_lines = context[:body].split("\n")
+      body_to_lines.each do | line |
+        if line =~ /:/ then
+          key_val = line.split(":")
+          tmpBody = tmpBody + "\"#{key_val[0].strip}\"=\"#{key_val[1].strip}\"  "
+        elsif line.strip.length > 0 then
+          tmpBody = tmpBody + " message=\"#{line.strip}\" "
+        end
+      end
       #key/Value => mail_timestmap/data
-      events[context[:mail_timestamp]] = "mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=#{context[:mail_type]} body=\"#{context[:body]}\""
+      events[context[:date]] = " mail_from=\"#{context[:mail_from]}\" mail_to=\"#{context[:mail_to]}\"  subject=\"#{context[:subject]}\"  mail_type=\"#{context[:mail_type]}\" #{tmpBody.strip}"
+
       return events
   end
 end
