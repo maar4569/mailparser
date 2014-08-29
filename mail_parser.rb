@@ -11,9 +11,7 @@ class ParsingDirector
     def write_to(filename)
         begin
             File.open( filename ,"w") do | file |
-                @events.each do | event |
-                  file.puts "#{event[0]},#{event[1]}"
-                end
+                @events.each do | event | file.puts "#{event[0]},#{event[1]}" end
             end
         rescue
             p "excepion #{self.class.name}.#{__method__}"
@@ -38,20 +36,23 @@ class EmlParser < ParserBuilder
     end
     def retrieve_mail
         p "#{self.class.name}.#{__method__} from #{@eml_dir}"
-        #directory_loop
-	#sample
-           mailObject = Hash.new
-	   mailObject[:mail_to]="aaa@example.com"
-	   mailObject[:mail_from]="bbb@example.com"
-	   mailObject[:subject]="thank you"
-	   mailObject[:mail_timestamp]="2014/08/20 23:59:59"
-	   mailObject[:log_timestamp]="2014/12/31 00:00:00"
-	   mailObject[:mail_type] = "smllw"
-	   mailObject[:body] = "test:hello test2:bye"
-	#sample
-	mlpsr = OplogMailParser.new(mailObject)
-        parsed_events = mlpsr.parse_mail
-	@events.merge parsed_events
+        if FileTest::Directory?( @eml_dir ) then
+            begin
+                Dir.glob( @eml_dir + "/**/*" ).each do | emlfile_path |
+                    mlpsr = OplogMailParser.new( MAIL_TO_HASH.call Mail.read(emlfile_path) )
+                    parsed_events = mlpsr.parse_mail #return arrayed events
+                    if parsed_events != nil then
+                       parsed_events.each do | event | @events.push event end
+                    end
+                end
+            rescue
+	        p $Log.fatal "exception #{self.class.name}.#{__method__}"
+                p "excepion #{self.class.name}.#{__method__}"
+	        p $Log.fatal $!
+                p $!
+            end
+	end
+        return @events
     end
 end
 class POP3Parser < ParserBuilder
@@ -78,9 +79,7 @@ class POP3Parser < ParserBuilder
 	   $Log.info "downloaded #{mails.length} mail(s)."
 	   if mails.length > 0 then
 	       mails.each do | mail |
-		   #MAIL_DUMP.call mail
-	           mail2 = MAIL_TO_HASH.call mail
-                   mlpsr = OplogMailParser.new(mail2)
+                   mlpsr = OplogMailParser.new( MAIL_TO_HASH.call mail )
                    parsed_events = mlpsr.parse_mail #return arrayed events
 		   if parsed_events != nil then 
                        parsed_events.each do | event | @events.push event end
@@ -118,7 +117,17 @@ class POP3Parser < ParserBuilder
 
    end
 end
+class MailAnlyzer
+  def initialize(mail)
+      @mail = mail
+  end
+  def parse_mail
+      $Log.fatal "raise abstracted method(#{__method__}. please overwrite)"
+  end
+  def mail_to_hash
 
+  end
+end
 class OplogMailParser
   LW_SVC="smllw"
   BK_DEL="bk_del"
@@ -154,8 +163,6 @@ class OplogMailParser
   end
   def parse_mail
       begin
-          #parse header
-	      #
 	  #parse body
           @mail_type = getMailTypeFromSubject @mail[:subject]
           case @mail_type
