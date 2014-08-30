@@ -9,7 +9,7 @@ class ParsingDirector
     end
     def write_to(filename)
         begin
-            File.open( filename ,"w") do | file |
+            File.open( filename ,"a") do | file |
                 @events.each do | event | file.puts "#{event[0]},#{event[1]}" end
             end
         rescue

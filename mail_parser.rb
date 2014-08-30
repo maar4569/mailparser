@@ -27,5 +27,6 @@ end
 mailDirector.do
 
 #output events.
-mailDirector.write_to "oplog.mail"
+eventname = "mailevents_#{Time.now.strftime("%Y%m%d")}.log"
+mailDirector.write_to eventname
 
