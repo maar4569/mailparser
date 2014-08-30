@@ -1,0 +1,8 @@
+cedential:
+  hostname: smtp.gmail.com
+  port: 465
+  username: user@gmail.com
+  password: pass
+  auth_type: login  
+  domain: smtp.gmail.com
+  ssl: true
